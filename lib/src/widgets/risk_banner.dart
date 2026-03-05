@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/dashboard_tokens.dart';
+
 class RiskBanner extends StatelessWidget {
   const RiskBanner({
     super.key,
@@ -18,16 +20,18 @@ class RiskBanner extends StatelessWidget {
     final summary = safeWarning.split(RegExp(r'[。.!?]')).first.trim();
 
     return Material(
-      color: const Color(0xFFFFF4EA),
-      borderRadius: BorderRadius.circular(16),
+      color: DashboardTokens.warningSoft,
+      borderRadius: BorderRadius.circular(DashboardTokens.cardRadius),
       child: InkWell(
         onTap: onToggle,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(DashboardTokens.cardRadius),
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: const Color(0xFFFFD7B8)),
+            borderRadius: BorderRadius.circular(DashboardTokens.cardRadius),
+            border: Border.all(
+              color: DashboardTokens.warning.withValues(alpha: 0.35),
+            ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -36,7 +40,7 @@ class RiskBanner extends StatelessWidget {
                 children: [
                   const Icon(
                     Icons.warning_amber_rounded,
-                    color: Color(0xFFD95F00),
+                    color: DashboardTokens.warning,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -45,22 +49,25 @@ class RiskBanner extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: const Color(0xFF7C2D12),
+                        color: DashboardTokens.textPrimary,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
                   Icon(
                     expanded ? Icons.expand_less : Icons.expand_more,
-                    color: const Color(0xFF9A3412),
+                    color: DashboardTokens.textSecondary,
                   ),
                 ],
               ),
               AnimatedCrossFade(
                 firstChild: const SizedBox.shrink(),
-                secondChild: const Padding(
+                secondChild: Padding(
                   padding: EdgeInsets.only(top: 8),
-                  child: Divider(height: 1, color: Color(0xFFFFD7B8)),
+                  child: Divider(
+                    height: 1,
+                    color: DashboardTokens.warning.withValues(alpha: 0.3),
+                  ),
                 ),
                 crossFadeState: expanded
                     ? CrossFadeState.showSecond
@@ -74,7 +81,7 @@ class RiskBanner extends StatelessWidget {
                   child: Text(
                     safeWarning,
                     style: const TextStyle(
-                      color: Color(0xFF9A3412),
+                      color: DashboardTokens.textSecondary,
                       height: 1.35,
                     ),
                   ),

@@ -11,10 +11,12 @@ class DashboardBottomTabBar extends StatelessWidget {
     super.key,
     required this.selectedTab,
     required this.onTabChanged,
+    this.allowReselectCurrentTab = false,
   });
 
   final DashboardTab selectedTab;
   final DashboardTabChanged onTabChanged;
+  final bool allowReselectCurrentTab;
 
   static const List<({IconData icon, String label})> _items = [
     (icon: Icons.home_filled, label: '首页'),
@@ -45,8 +47,12 @@ class DashboardBottomTabBar extends StatelessWidget {
             return Expanded(
               child: InkWell(
                 key: ValueKey('dashboard-tab-${item.label}'),
-                borderRadius: BorderRadius.circular(DashboardTokens.buttonRadius),
-                onTap: selected ? null : () => onTabChanged(tab),
+                borderRadius: BorderRadius.circular(
+                  DashboardTokens.buttonRadius,
+                ),
+                onTap: !selected || allowReselectCurrentTab
+                    ? () => onTabChanged(tab)
+                    : null,
                 child: SizedBox(
                   height: 44,
                   child: Column(

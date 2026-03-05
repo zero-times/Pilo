@@ -8,7 +8,11 @@ import '../services/deepseek_service.dart';
 import '../services/local_snapshot_store.dart';
 import '../services/snapshot_portability_service.dart';
 import '../theme/dashboard_tokens.dart';
-import '../widgets/dashboard_bottom_tab_bar.dart';
+import '../widgets/dashboard_page_header.dart';
+import '../widgets/dashboard_segmented_tab_selector.dart';
+import '../widgets/dashboard_snack_bar.dart';
+import '../widgets/dashboard_surface_card.dart';
+import '../widgets/dashboard_tab_page_scaffold.dart';
 import 'achievement_page.dart';
 import 'dashboard_view_data.dart';
 import 'plan_history_page.dart';
@@ -235,7 +239,10 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
     );
     final next = await Navigator.of(context).push<ApiSettings>(
       MaterialPageRoute<ApiSettings>(
-        builder: (context) => _ApiSettingsPage(initialSettings: settings),
+        builder: (context) => _ApiSettingsPage(
+          initialSettings: settings,
+          snapshotStore: _snapshotStore,
+        ),
       ),
     );
     if (next == null) {
@@ -253,16 +260,12 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('API 设置已保存')));
+      showDashboardSnackBar(context, message: 'API 设置已保存');
     } catch (e) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('API 设置保存失败：$e')));
+      showDashboardSnackBar(context, message: 'API 设置保存失败：$e', isError: true);
     }
   }
 
@@ -273,7 +276,9 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
     final next = await Navigator.of(context).push<UserProfile>(
       MaterialPageRoute<UserProfile>(
         builder: (_) => _BasicProfileSettingsPage(
-          initialProfile: _snapshot.userProfile ?? _buildProfileDraftForSettings(),
+          initialProfile:
+              _snapshot.userProfile ?? _buildProfileDraftForSettings(),
+          snapshotStore: _snapshotStore,
         ),
       ),
     );
@@ -290,16 +295,12 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('基本信息已保存')));
+      showDashboardSnackBar(context, message: '基本信息已保存');
     } catch (e) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('基本信息保存失败：$e')));
+      showDashboardSnackBar(context, message: '基本信息保存失败：$e', isError: true);
     }
   }
 
@@ -542,29 +543,33 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
                           ValueListenableBuilder<TextEditingValue>(
                             valueListenable: _minutesCtrl,
                             builder: (context, value, _) {
-                              return ChipTheme(
-                                data: _buildDashboardChipTheme(context),
-                                child: Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: [20, 30, 45, 60]
-                                      .map((minute) {
-                                        final isSelected =
-                                            value.text.trim() ==
-                                            minute.toString();
-                                        return ChoiceChip(
-                                          label: Text('$minute 分钟'),
-                                          selected: isSelected,
-                                          showCheckmark: false,
-                                          onSelected: (_) =>
-                                              _setControllerTextAndKeepCursor(
-                                                _minutesCtrl,
-                                                minute.toString(),
-                                              ),
-                                        );
-                                      })
-                                      .toList(growable: false),
-                                ),
+                              final selectedQuickMinute =
+                                  int.tryParse(value.text.trim()) ?? -1;
+                              return DashboardSegmentedTabSelector<int>(
+                                items: const [
+                                  DashboardSegmentedTabItem<int>(
+                                    value: 20,
+                                    label: '20 分钟',
+                                  ),
+                                  DashboardSegmentedTabItem<int>(
+                                    value: 30,
+                                    label: '30 分钟',
+                                  ),
+                                  DashboardSegmentedTabItem<int>(
+                                    value: 45,
+                                    label: '45 分钟',
+                                  ),
+                                  DashboardSegmentedTabItem<int>(
+                                    value: 60,
+                                    label: '60 分钟',
+                                  ),
+                                ],
+                                selectedValue: selectedQuickMinute,
+                                onChanged: (minute) =>
+                                    _setControllerTextAndKeepCursor(
+                                      _minutesCtrl,
+                                      minute.toString(),
+                                    ),
                               );
                             },
                           ),
@@ -583,27 +588,23 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
                               final selectedEquipments = _parseEquipmentList(
                                 value.text,
                               ).toSet();
-                              return ChipTheme(
-                                data: _buildDashboardChipTheme(context),
-                                child: Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: ['无器械', '瑜伽垫', '哑铃', '拉力带']
-                                      .map((equipment) {
-                                        return FilterChip(
-                                          label: Text(equipment),
-                                          selected: selectedEquipments.contains(
-                                            equipment,
-                                          ),
-                                          onSelected: (selected) =>
-                                              _toggleEquipmentChip(
-                                                equipment,
-                                                selected,
-                                              ),
-                                        );
-                                      })
-                                      .toList(growable: false),
-                                ),
+                              return Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: ['无器械', '瑜伽垫', '哑铃', '拉力带']
+                                    .map((equipment) {
+                                      final selected = selectedEquipments
+                                          .contains(equipment);
+                                      return _QuickSelectTag(
+                                        label: equipment,
+                                        selected: selected,
+                                        onTap: () => _toggleEquipmentChip(
+                                          equipment,
+                                          !selected,
+                                        ),
+                                      );
+                                    })
+                                    .toList(growable: false),
                               );
                             },
                           ),
@@ -805,11 +806,12 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
         _achievementState = latestSnapshot.achievementState;
         _pendingSession = _resolvePendingSession(latestSnapshot);
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('计划已生成：共 ${plan.items.length} 项，建议立即开始训练'),
-          action: SnackBarAction(label: '开始', onPressed: _startTraining),
-        ),
+      showDashboardSnackBar(
+        context,
+        message: '计划已生成：共 ${plan.items.length} 项，建议立即开始训练',
+        actionLabel: '开始',
+        onAction: _startTraining,
+        duration: const Duration(seconds: 4),
       );
     } on DeepSeekException catch (e) {
       if (mounted) {
@@ -989,42 +991,20 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('已导出并调起分享。')));
+      showDashboardSnackBar(context, message: '已导出并调起分享。');
     } catch (e) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('导出失败：$e')));
+      showDashboardSnackBar(context, message: '导出失败：$e', isError: true);
     }
   }
 
   Future<void> _importData() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(DashboardTokens.cardRadius),
-          ),
-          title: const Text('导入并覆盖本地数据'),
-          content: const Text('导入将覆盖当前基础信息、计划与打卡记录，是否继续？'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('继续导入'),
-            ),
-          ],
-        );
-      },
+    final confirmed = await _showDashboardConfirmDialog(
+      title: '导入并覆盖本地数据',
+      message: '导入将覆盖当前基础信息、计划与打卡记录，是否继续？',
+      confirmLabel: '继续导入',
     );
 
     if (confirmed != true) {
@@ -1042,23 +1022,17 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('导入成功，已刷新页面数据。')));
+      showDashboardSnackBar(context, message: '导入成功，已刷新页面数据。');
     } on FormatException catch (e) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(e.message)));
+      showDashboardSnackBar(context, message: e.message, isError: true);
     } catch (e) {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('导入失败：$e')));
+      showDashboardSnackBar(context, message: '导入失败：$e', isError: true);
     }
   }
 
@@ -1079,6 +1053,11 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
           shrinkWrap: true,
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [
+            const DashboardPageHeader(
+              title: '帮助与反馈',
+              subtitle: '延续首页四标签规范，统一入口与数据操作。',
+            ),
+            const SizedBox(height: 8),
             _buildSheetActionTile(
               leading: const Icon(Icons.download_for_offline),
               title: '导入数据',
@@ -1126,28 +1105,11 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
   }
 
   Future<void> _confirmAndResetLocalData() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(DashboardTokens.cardRadius),
-          ),
-          title: const Text('退出并清空本地数据'),
-          content: const Text('将清除当前设备上的计划、打卡和设置数据，是否继续？'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('确认清空'),
-            ),
-          ],
-        );
-      },
+    final confirmed = await _showDashboardConfirmDialog(
+      title: '退出并清空本地数据',
+      message: '将清除当前设备上的计划、打卡和设置数据，是否继续？',
+      confirmLabel: '确认清空',
+      warning: true,
     );
     if (confirmed != true) {
       return;
@@ -1162,9 +1124,118 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
       _currentTabIndex = 0;
       _error = null;
     });
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('已退出并清空本地数据')));
+    showDashboardSnackBar(context, message: '已退出并清空本地数据');
+  }
+
+  Future<bool?> _showDashboardConfirmDialog({
+    required String title,
+    required String message,
+    required String confirmLabel,
+    bool warning = false,
+  }) {
+    return showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+          child: DashboardSurfaceCard(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: warning
+                            ? DashboardTokens.warningSoft
+                            : DashboardTokens.accentSoft,
+                        borderRadius: BorderRadius.circular(17),
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(
+                        warning
+                            ? Icons.warning_amber_rounded
+                            : Icons.file_download_done_rounded,
+                        color: warning
+                            ? DashboardTokens.warning
+                            : DashboardTokens.accent,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: DashboardTokens.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  message,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    height: 1.35,
+                    color: DashboardTokens.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(false),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(42),
+                          foregroundColor: DashboardTokens.textSecondary,
+                          side: const BorderSide(
+                            color: DashboardTokens.inputBorder,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(
+                              DashboardTokens.buttonRadius,
+                            ),
+                          ),
+                        ),
+                        child: const Text('取消'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(true),
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(42),
+                          backgroundColor: warning
+                              ? DashboardTokens.warning
+                              : DashboardTokens.accent,
+                          foregroundColor: DashboardTokens.surface,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(
+                              DashboardTokens.buttonRadius,
+                            ),
+                          ),
+                        ),
+                        child: Text(confirmLabel),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _startTraining() {
@@ -1235,29 +1306,79 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
           separatorBuilder: (_, index) => const SizedBox(height: 8),
           itemBuilder: (context, index) {
             if (index == 0) {
-              return Text(
-                '完整动作列表',
-                style: Theme.of(context).textTheme.titleMedium,
+              return DashboardSurfaceCard(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '完整动作列表',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                        color: _DashboardColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '共 ${plan.items.length} 项 · 预计 ${_formatDuration(plan.totalDurationSeconds)}',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: _DashboardColors.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
               );
             }
             final item = plan.items[index - 1];
-            return Container(
+            final isRest = item.type == 'rest';
+            return DashboardSurfaceCard(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(
-                  item.type == 'rest'
-                      ? Icons.self_improvement
-                      : Icons.fitness_center,
-                ),
-                title: Text(item.effectiveTitle),
-                subtitle: Text(
-                  '${_formatDuration(item.normalizedDurationSeconds)} · ${item.type == 'rest' ? '休息' : item.intensity}',
-                ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: isRest
+                          ? DashboardTokens.info.withValues(alpha: 0.12)
+                          : DashboardTokens.accentSoft,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      isRest ? Icons.self_improvement : Icons.fitness_center,
+                      size: 18,
+                      color: isRest
+                          ? DashboardTokens.info
+                          : _DashboardColors.accent,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.effectiveTitle,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${_formatDuration(item.normalizedDurationSeconds)} · ${isRest ? '休息' : item.intensity}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: _DashboardColors.textMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             );
           },
@@ -1282,8 +1403,11 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
         return ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [
-            Text('训练建议', style: Theme.of(sheetContext).textTheme.titleLarge),
-            const SizedBox(height: 12),
+            const DashboardPageHeader(
+              title: '训练建议',
+              subtitle: '按首页四标签规范查看饮食、补水与风险提示。',
+            ),
+            const SizedBox(height: 8),
             _buildSheetSection(
               title: '饮食',
               child: _AdviceRow(
@@ -1602,35 +1726,7 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
   }
 
   Widget _buildHeader(String title, String subtitle) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: _DashboardColors.pageBackground,
-        borderRadius: BorderRadius.circular(DashboardTokens.cardRadius),
-      ),
-      padding: const EdgeInsets.fromLTRB(8, 10, 8, 6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 32,
-              fontWeight: FontWeight.w700,
-              color: _DashboardColors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            subtitle,
-            style: const TextStyle(
-              fontSize: 12,
-              color: _DashboardColors.textSecondary,
-            ),
-          ),
-        ],
-      ),
-    );
+    return DashboardPageHeader(title: title, subtitle: subtitle);
   }
 
   Widget _buildWorkoutStatusButton(WorkoutItemStatus status) {
@@ -1758,6 +1854,70 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
     );
   }
 
+  Widget _buildRegeneratePlanButton({double minHeight = 46}) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: _loading ? null : _openPlanBuilderSheet,
+        style: OutlinedButton.styleFrom(
+          minimumSize: Size.fromHeight(minHeight),
+          backgroundColor: DashboardTokens.accentSoft,
+          foregroundColor: _DashboardColors.accent,
+          side: BorderSide(
+            color: _DashboardColors.accent.withValues(alpha: 0.45),
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(DashboardTokens.buttonRadius),
+          ),
+        ),
+        icon: const Icon(Icons.refresh_rounded, size: 18),
+        label: const Text(
+          '重新生成计划',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHydratingState() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: Column(
+        children: [
+          _buildHeader('训练计划', '正在同步你的训练数据与四标签面板。'),
+          const SizedBox(height: 12),
+          Expanded(
+            child: Center(
+              child: SizedBox(
+                width: 250,
+                child: DashboardSurfaceCard(
+                  outlined: true,
+                  child: const Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.dashboard_customize_rounded,
+                        size: 28,
+                        color: _DashboardColors.accent,
+                      ),
+                      SizedBox(height: 12),
+                      CircularProgressIndicator(color: _DashboardColors.accent),
+                      SizedBox(height: 10),
+                      Text(
+                        '正在加载首页四标签内容...',
+                        style: TextStyle(color: _DashboardColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildHomeTab() {
     final data = _buildHomeViewData();
     final plan = _activePlanForDashboard;
@@ -1818,7 +1978,9 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
                           color: const Color(0xFFEEF4FF),
-                          borderRadius: BorderRadius.circular(DashboardTokens.buttonRadius),
+                          borderRadius: BorderRadius.circular(
+                            DashboardTokens.buttonRadius,
+                          ),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1849,7 +2011,9 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
                           color: const Color(0xFFFFF2E8),
-                          borderRadius: BorderRadius.circular(DashboardTokens.buttonRadius),
+                          borderRadius: BorderRadius.circular(
+                            DashboardTokens.buttonRadius,
+                          ),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1917,6 +2081,10 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
                     ),
                   ],
                 ),
+                if (plan != null) ...[
+                  const SizedBox(height: 8),
+                  _buildRegeneratePlanButton(minHeight: 44),
+                ],
               ],
             ),
           ),
@@ -1995,12 +2163,9 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
         children: [
           _buildHeader('计划', '本周训练与恢复冲刺安排'),
           const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(DashboardTokens.cardRadius),
-            ),
+          DashboardSurfaceCard(
+            outlined: true,
+            padding: const EdgeInsets.all(12),
             child: Column(
               children: [
                 Row(
@@ -2060,12 +2225,9 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
             ),
           ),
           const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(DashboardTokens.cardRadius),
-            ),
+          DashboardSurfaceCard(
+            outlined: true,
+            padding: const EdgeInsets.all(12),
             child: Column(
               children: [
                 Row(
@@ -2105,12 +2267,9 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
             ),
           ),
           const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(DashboardTokens.cardRadius),
-            ),
+          DashboardSurfaceCard(
+            outlined: true,
+            padding: const EdgeInsets.all(12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -2131,7 +2290,7 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
                               metric.label,
                               style: const TextStyle(
                                 fontSize: 15,
-                                color: Color(0xFF3C3C43),
+                                color: _DashboardColors.textSecondary,
                               ),
                             ),
                             const Spacer(),
@@ -2178,6 +2337,10 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
           ),
           const SizedBox(height: 12),
           _buildPrimaryActionButton(label: '开始今日计划'),
+          if (_activePlanForDashboard != null) ...[
+            const SizedBox(height: 8),
+            _buildRegeneratePlanButton(),
+          ],
         ],
       ),
     );
@@ -2197,35 +2360,28 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
         children: [
           _buildHeader('统计', '查看训练趋势与冲刺表现'),
           const SizedBox(height: 8),
-          Container(
+          DashboardSurfaceCard(
+            outlined: true,
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(DashboardTokens.cardRadius),
-            ),
             child: Column(
               children: [
-                SegmentedButton<StatsRange>(
-                  segments: const [
-                    ButtonSegment(value: StatsRange.days7, label: Text('7天')),
-                    ButtonSegment(value: StatsRange.days30, label: Text('30天')),
-                    ButtonSegment(value: StatsRange.days90, label: Text('90天')),
+                DashboardSegmentedTabSelector<StatsRange>(
+                  items: const [
+                    DashboardSegmentedTabItem<StatsRange>(
+                      value: StatsRange.days7,
+                      label: '7天',
+                    ),
+                    DashboardSegmentedTabItem<StatsRange>(
+                      value: StatsRange.days30,
+                      label: '30天',
+                    ),
+                    DashboardSegmentedTabItem<StatsRange>(
+                      value: StatsRange.days90,
+                      label: '90天',
+                    ),
                   ],
-                  selected: {_statsRange},
-                  style: SegmentedButton.styleFrom(
-                    selectedBackgroundColor: _DashboardColors.accent,
-                    selectedForegroundColor: Colors.white,
-                    foregroundColor: const Color(0xFF3C3C43),
-                    side: BorderSide.none,
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    textStyle: const TextStyle(fontSize: 12),
-                  ),
-                  onSelectionChanged: (selection) {
-                    if (selection.isEmpty) {
-                      return;
-                    }
-                    setState(() => _statsRange = selection.first);
-                  },
+                  selectedValue: _statsRange,
+                  onChanged: (value) => setState(() => _statsRange = value),
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -2239,12 +2395,9 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
             ),
           ),
           const SizedBox(height: 8),
-          Container(
+          DashboardSurfaceCard(
+            outlined: true,
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(DashboardTokens.cardRadius),
-            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -2292,12 +2445,9 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
             ),
           ),
           const SizedBox(height: 8),
-          Container(
+          DashboardSurfaceCard(
+            outlined: true,
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(DashboardTokens.cardRadius),
-            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -2368,12 +2518,9 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
             ),
           ),
           const SizedBox(height: 8),
-          Container(
+          DashboardSurfaceCard(
+            outlined: true,
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(DashboardTokens.cardRadius),
-            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -2402,7 +2549,9 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
                         color: rank == 1
                             ? const Color(0xFFEEF8F2)
                             : const Color(0xFFF7F8FB),
-                        borderRadius: BorderRadius.circular(DashboardTokens.buttonRadius),
+                        borderRadius: BorderRadius.circular(
+                          DashboardTokens.buttonRadius,
+                        ),
                       ),
                       child: Row(
                         children: [
@@ -2472,162 +2621,164 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
         children: [
           _buildHeader('我的', '账号、偏好与隐私设置'),
           const SizedBox(height: 8),
-          Material(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(DashboardTokens.cardRadius),
-            child: InkWell(
-              key: const ValueKey('profile-basic-info-entry'),
-              onTap: _openBasicProfileSettingsPage,
-              borderRadius: BorderRadius.circular(DashboardTokens.cardRadius),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 60,
-                      height: 60,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFF97316), Color(0xFFFF9A4A)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                      child: Text(
-                        avatarText,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 24,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            data.displayName,
-                            style: const TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w600,
-                            ),
+          DashboardSurfaceCard(
+            outlined: true,
+            padding: EdgeInsets.zero,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                key: const ValueKey('profile-basic-info-entry'),
+                onTap: _openBasicProfileSettingsPage,
+                borderRadius: BorderRadius.circular(DashboardTokens.cardRadius),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 60,
+                        height: 60,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFF97316), Color(0xFFFF9A4A)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            data.meta,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: _DashboardColors.textMuted,
-                            ),
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        child: Text(
+                          avatarText,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w700,
                           ),
-                          const SizedBox(height: 2),
-                          const Text(
-                            '点击可设置基本信息',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: _DashboardColors.accent,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      height: 28,
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: _DashboardColors.accent,
-                        borderRadius: BorderRadius.circular(
-                          DashboardTokens.buttonRadius,
                         ),
                       ),
-                      child: Text(
-                        data.badgeText,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              data.displayName,
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              data.meta,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: _DashboardColors.textMuted,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            const Text(
+                              '点击可设置基本信息',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: _DashboardColors.accent,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 6),
-                    const Icon(
-                      Icons.chevron_right_rounded,
-                      color: _DashboardColors.textMuted,
-                    ),
-                  ],
+                      const SizedBox(width: 8),
+                      Container(
+                        height: 28,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: _DashboardColors.accent,
+                          borderRadius: BorderRadius.circular(
+                            DashboardTokens.buttonRadius,
+                          ),
+                        ),
+                        child: Text(
+                          data.badgeText,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      const Icon(
+                        Icons.chevron_right_rounded,
+                        color: _DashboardColors.textMuted,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
           const SizedBox(height: 8),
-          Container(
+          DashboardSurfaceCard(
+            outlined: true,
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(DashboardTokens.cardRadius),
-            ),
             child: Column(
               children: [
                 _buildProfileInfoRow(
                   '每日目标',
                   data.goalText,
-                  background: const Color(0xFFEEF4FF),
+                  icon: Icons.timer_outlined,
+                  background: DashboardTokens.info.withValues(alpha: 0.12),
                 ),
                 const SizedBox(height: 8),
                 _buildProfileInfoRow(
                   '提醒时间',
                   data.reminderText,
-                  background: const Color(0xFFF3F8F2),
+                  icon: Icons.notifications_none_rounded,
+                  background: DashboardTokens.successSoft,
                 ),
                 const SizedBox(height: 8),
                 _buildProfileInfoRow(
                   '单位设置',
                   data.unitText,
-                  background: const Color(0xFFFFF4EA),
+                  icon: Icons.straighten_rounded,
+                  background: DashboardTokens.warningSoft,
                 ),
               ],
             ),
           ),
           const SizedBox(height: 8),
-          Container(
+          DashboardSurfaceCard(
+            outlined: true,
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(DashboardTokens.cardRadius),
-            ),
             child: Column(
               children: [
                 _buildProfileActionRow(
                   key: const ValueKey('profile-action-notification'),
                   label: '通知设置',
+                  icon: Icons.notifications_outlined,
                   onTap: () {
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(const SnackBar(content: Text('通知设置即将上线')));
+                    showDashboardSnackBar(context, message: '通知设置即将上线');
                   },
                 ),
                 const SizedBox(height: 8),
                 _buildProfileActionRow(
                   key: const ValueKey('profile-action-privacy'),
                   label: '隐私与安全',
+                  icon: Icons.lock_outline_rounded,
                   onTap: _openApiSettingsPage,
                 ),
                 const SizedBox(height: 8),
                 _buildProfileActionRow(
                   key: const ValueKey('profile-action-export'),
                   label: '数据导出',
+                  icon: Icons.ios_share_rounded,
                   onTap: _exportData,
                 ),
                 const SizedBox(height: 8),
                 _buildProfileActionRow(
                   key: const ValueKey('profile-action-help'),
                   label: '帮助与反馈',
+                  icon: Icons.help_outline_rounded,
                   onTap: _openHelpAndFeedbackSheet,
                 ),
               ],
@@ -2644,7 +2795,9 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
                 backgroundColor: const Color(0xFFFFEDEE),
                 foregroundColor: const Color(0xFFC62828),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(DashboardTokens.buttonRadius),
+                  borderRadius: BorderRadius.circular(
+                    DashboardTokens.buttonRadius,
+                  ),
                 ),
               ),
               child: const Text('退出登录'),
@@ -2658,24 +2811,44 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
   Widget _buildProfileInfoRow(
     String label,
     String value, {
+    required IconData icon,
     required Color background,
   }) {
     return Container(
       height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(DashboardTokens.buttonRadius),
       ),
       child: Row(
         children: [
-          Text(label, style: const TextStyle(fontSize: 15)),
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.82),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            alignment: Alignment.center,
+            child: Icon(icon, size: 16, color: _DashboardColors.textSecondary),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 13,
+              color: _DashboardColors.textMuted,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
           const Spacer(),
           Text(
             value,
             style: const TextStyle(
-              fontSize: 13,
-              color: _DashboardColors.textMuted,
+              fontSize: 15,
+              color: _DashboardColors.textPrimary,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -2686,6 +2859,7 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
   Widget _buildProfileActionRow({
     Key? key,
     required String label,
+    required IconData icon,
     required VoidCallback onTap,
   }) {
     return InkWell(
@@ -2694,18 +2868,38 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
       borderRadius: BorderRadius.circular(DashboardTokens.buttonRadius),
       child: Container(
         height: 44,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-          color: const Color(0xFFF7F9FC),
+          color: DashboardTokens.pageBackground,
           borderRadius: BorderRadius.circular(DashboardTokens.buttonRadius),
+          border: Border.all(color: DashboardTokens.borderSubtle),
         ),
         child: Row(
           children: [
-            Text(label, style: const TextStyle(fontSize: 15)),
+            Container(
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(
+                color: DashboardTokens.accentSoft,
+                borderRadius: BorderRadius.circular(13),
+              ),
+              alignment: Alignment.center,
+              child: Icon(icon, size: 15, color: _DashboardColors.accent),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 15,
+                color: _DashboardColors.textPrimary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
             const Spacer(),
-            const Text(
-              '›',
-              style: TextStyle(fontSize: 16, color: Color(0xFF8E8E93)),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 18,
+              color: _DashboardColors.textMuted,
             ),
           ],
         ),
@@ -2732,37 +2926,9 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
     );
   }
 
-  ChipThemeData _buildDashboardChipTheme(BuildContext context) {
-    return ChipTheme.of(context).copyWith(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(DashboardTokens.buttonRadius),
-      ),
-      side: const BorderSide(color: Color(0xFFE2E8F0)),
-      selectedColor: _DashboardColors.accent,
-      backgroundColor: const Color(0xFFF8FAFC),
-      checkmarkColor: Colors.white,
-      labelStyle: const TextStyle(
-        fontSize: 13,
-        color: _DashboardColors.textSecondary,
-      ),
-      secondaryLabelStyle: const TextStyle(
-        fontSize: 13,
-        color: Colors.white,
-        fontWeight: FontWeight.w600,
-      ),
-      pressElevation: 0,
-      elevation: 0,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-    );
-  }
-
   Widget _buildSheetSection({required String title, required Widget child}) {
-    return Container(
+    return DashboardSurfaceCard(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(DashboardTokens.cardRadius),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -2782,43 +2948,76 @@ class _TrainingPlannerPageState extends State<TrainingPlannerPage> {
     required String title,
     required VoidCallback onTap,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: ListTile(
-        leading: leading,
-        title: Text(title),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: onTap,
+    return DashboardSurfaceCard(
+      outlined: true,
+      padding: EdgeInsets.zero,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(DashboardTokens.cardRadius),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: DashboardTokens.accentSoft,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: IconTheme(
+                    data: const IconThemeData(
+                      color: DashboardTokens.accent,
+                      size: 18,
+                    ),
+                    child: leading,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: DashboardTokens.textPrimary,
+                    ),
+                  ),
+                ),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: DashboardTokens.textMuted,
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return DashboardTabPageScaffold(
+      title: '训练计划',
+      showAppBar: false,
+      selectedTab: DashboardTab.values[_currentTabIndex],
+      onTabChanged: (tab) => setState(() => _currentTabIndex = tab.index),
       backgroundColor: _DashboardColors.pageBackground,
-      body: SafeArea(
-        child: _hydrating
-            ? const Center(child: CircularProgressIndicator())
-            : IndexedStack(
-                index: _currentTabIndex,
-                children: [
-                  _buildHomeTab(),
-                  _buildPlanTab(),
-                  _buildStatsTab(),
-                  _buildProfileTab(),
-                ],
-              ),
-      ),
-      bottomNavigationBar: _hydrating
-          ? null
-          : DashboardBottomTabBar(
-              selectedTab: DashboardTab.values[_currentTabIndex],
-              onTabChanged: (tab) =>
-                  setState(() => _currentTabIndex = tab.index),
+      body: _hydrating
+          ? _buildHydratingState()
+          : IndexedStack(
+              index: _currentTabIndex,
+              children: [
+                _buildHomeTab(),
+                _buildPlanTab(),
+                _buildStatsTab(),
+                _buildProfileTab(),
+              ],
             ),
     );
   }
@@ -2835,6 +3034,30 @@ class _DashboardColors {
   static const textMuted = DashboardTokens.textMuted;
 }
 
+InputDecoration _buildDashboardInputDecoration({
+  required String labelText,
+  String? hintText,
+}) {
+  return InputDecoration(
+    labelText: labelText,
+    hintText: hintText,
+    filled: true,
+    fillColor: DashboardTokens.inputFill,
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(DashboardTokens.buttonRadius),
+      borderSide: BorderSide.none,
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(DashboardTokens.buttonRadius),
+      borderSide: const BorderSide(color: DashboardTokens.inputBorder),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(DashboardTokens.buttonRadius),
+      borderSide: const BorderSide(color: _DashboardColors.accent),
+    ),
+  );
+}
+
 class _PendingSessionEntry {
   const _PendingSessionEntry({
     required this.plan,
@@ -2847,6 +3070,123 @@ class _PendingSessionEntry {
   final String planVersion;
   final int currentIndex;
   final int completedCount;
+}
+
+class _SettingsOverviewTile extends StatelessWidget {
+  const _SettingsOverviewTile({
+    required this.icon,
+    required this.title,
+    required this.value,
+    required this.iconBackground,
+    required this.iconColor,
+    this.valueColor = _DashboardColors.textPrimary,
+  });
+
+  final IconData icon;
+  final String title;
+  final String value;
+  final Color iconBackground;
+  final Color iconColor;
+  final Color valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 88,
+      child: DashboardSurfaceCard(
+        outlined: true,
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: iconBackground,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              alignment: Alignment.center,
+              child: Icon(icon, size: 18, color: iconColor),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: _DashboardColors.textMuted,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: valueColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickSelectTag extends StatelessWidget {
+  const _QuickSelectTag({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected
+        ? DashboardTokens.accent
+        : DashboardTokens.textInactive;
+    return InkWell(
+      borderRadius: BorderRadius.circular(DashboardTokens.buttonRadius),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected
+              ? DashboardTokens.accentSoft
+              : DashboardTokens.pageBackground,
+          borderRadius: BorderRadius.circular(DashboardTokens.buttonRadius),
+          border: Border.all(
+            color: selected
+                ? DashboardTokens.accent
+                : DashboardTokens.borderSubtle,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: color,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _AdviceRow extends StatelessWidget {
@@ -2888,9 +3228,13 @@ class _AdviceRow extends StatelessWidget {
 }
 
 class _BasicProfileSettingsPage extends StatefulWidget {
-  const _BasicProfileSettingsPage({required this.initialProfile});
+  const _BasicProfileSettingsPage({
+    required this.initialProfile,
+    required this.snapshotStore,
+  });
 
   final UserProfile initialProfile;
+  final LocalSnapshotStore snapshotStore;
 
   @override
   State<_BasicProfileSettingsPage> createState() =>
@@ -3045,14 +3389,19 @@ class _BasicProfileSettingsPageState extends State<_BasicProfileSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final targetMinutes =
+        int.tryParse(_minutesCtrl.text.trim()) ??
+        widget.initialProfile.exerciseMinutes;
+    final equipmentCount = _parseEquipmentList(_equipmentsCtrl.text).length;
+
+    return DashboardTabPageScaffold(
+      title: '基本信息设置',
+      showAppBar: false,
+      selectedTab: DashboardTab.profile,
+      useSafeArea: false,
       backgroundColor: _DashboardColors.pageBackground,
-      appBar: AppBar(
-        title: const Text('基本信息设置'),
-        backgroundColor: Colors.white,
-        foregroundColor: _DashboardColors.textPrimary,
-        elevation: 0,
-      ),
+      snapshotStore: widget.snapshotStore,
+      allowReselectCurrentTab: true,
       body: SafeArea(
         child: Form(
           key: _formKey,
@@ -3060,17 +3409,84 @@ class _BasicProfileSettingsPageState extends State<_BasicProfileSettingsPage> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(DashboardTokens.cardRadius),
+              const DashboardPageHeader(
+                title: '基本信息',
+                subtitle: '按首页四标签样式维护你的训练档案。',
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: _SettingsOverviewTile(
+                      icon: Icons.timer_outlined,
+                      title: '每日目标',
+                      value: '${targetMinutes <= 0 ? 30 : targetMinutes} 分钟',
+                      iconBackground: DashboardTokens.info.withValues(
+                        alpha: 0.12,
+                      ),
+                      iconColor: _DashboardColors.info,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _SettingsOverviewTile(
+                      icon: Icons.fitness_center,
+                      title: '可用器材',
+                      value: '$equipmentCount 项',
+                      iconBackground: DashboardTokens.warningSoft,
+                      iconColor: _DashboardColors.accent,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              const DashboardSurfaceCard(
+                outlined: true,
+                padding: EdgeInsets.fromLTRB(12, 10, 12, 10),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.tips_and_updates_outlined,
+                      size: 18,
+                      color: DashboardTokens.textMuted,
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '基础信息用于生成计划与恢复评估，建议按周更新一次。',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: DashboardTokens.textMuted,
+                          height: 1.35,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
+              ),
+              const SizedBox(height: 10),
+              DashboardSurfaceCard(
+                outlined: true,
+                padding: const EdgeInsets.all(12),
                 child: Column(
                   children: [
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '身体与训练偏好',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
                       initialValue: _gender,
-                      decoration: _buildInputDecoration(labelText: '性别'),
+                      decoration: _buildDashboardInputDecoration(
+                        labelText: '性别',
+                      ),
                       items: const [
                         DropdownMenuItem(value: 'unknown', child: Text('未知')),
                         DropdownMenuItem(value: 'male', child: Text('男')),
@@ -3090,7 +3506,9 @@ class _BasicProfileSettingsPageState extends State<_BasicProfileSettingsPage> {
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
-                      decoration: _buildInputDecoration(labelText: '身高（cm）'),
+                      decoration: _buildDashboardInputDecoration(
+                        labelText: '身高（cm）',
+                      ),
                       inputFormatters: [
                         FilteringTextInputFormatter.allow(
                           RegExp(r'^\d*\.?\d{0,1}'),
@@ -3109,7 +3527,9 @@ class _BasicProfileSettingsPageState extends State<_BasicProfileSettingsPage> {
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
-                      decoration: _buildInputDecoration(labelText: '体重（kg）'),
+                      decoration: _buildDashboardInputDecoration(
+                        labelText: '体重（kg）',
+                      ),
                       inputFormatters: [
                         FilteringTextInputFormatter.allow(
                           RegExp(r'^\d*\.?\d{0,1}'),
@@ -3126,7 +3546,10 @@ class _BasicProfileSettingsPageState extends State<_BasicProfileSettingsPage> {
                     TextFormField(
                       controller: _minutesCtrl,
                       keyboardType: TextInputType.number,
-                      decoration: _buildInputDecoration(labelText: '每日训练目标（分钟）'),
+                      onChanged: (_) => setState(() {}),
+                      decoration: _buildDashboardInputDecoration(
+                        labelText: '每日训练目标（分钟）',
+                      ),
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       validator: (value) => _validateIntInRange(
                         value,
@@ -3138,7 +3561,8 @@ class _BasicProfileSettingsPageState extends State<_BasicProfileSettingsPage> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _equipmentsCtrl,
-                      decoration: _buildInputDecoration(
+                      onChanged: (_) => setState(() {}),
+                      decoration: _buildDashboardInputDecoration(
                         labelText: '器材（逗号分隔）',
                         hintText: '如：瑜伽垫,哑铃',
                       ),
@@ -3146,13 +3570,15 @@ class _BasicProfileSettingsPageState extends State<_BasicProfileSettingsPage> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _goalCtrl,
-                      decoration: _buildInputDecoration(labelText: '锻炼目的'),
+                      decoration: _buildDashboardInputDecoration(
+                        labelText: '锻炼目的',
+                      ),
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _notesCtrl,
                       maxLines: 2,
-                      decoration: _buildInputDecoration(
+                      decoration: _buildDashboardInputDecoration(
                         labelText: '备注（伤病/限制/偏好）',
                       ),
                     ),
@@ -3160,7 +3586,7 @@ class _BasicProfileSettingsPageState extends State<_BasicProfileSettingsPage> {
                     TextFormField(
                       controller: _trainingHistoryCtrl,
                       maxLines: 2,
-                      decoration: _buildInputDecoration(
+                      decoration: _buildDashboardInputDecoration(
                         labelText: '最近7天历史训练摘要',
                         hintText: '例如：最近一周完成了2次慢跑和1次力量训练',
                       ),
@@ -3182,6 +3608,30 @@ class _BasicProfileSettingsPageState extends State<_BasicProfileSettingsPage> {
                               setState(() => _hasDisease = value),
                         ),
                       ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              DashboardSurfaceCard(
+                outlined: true,
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.verified_user_outlined,
+                      size: 18,
+                      color: DashboardTokens.textMuted,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _hasDisease ? '已标记基础疾病，系统会降低训练强度。' : '未标记基础疾病，按标准训练强度生成计划。',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: DashboardTokens.textSecondary,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -3213,36 +3663,16 @@ class _BasicProfileSettingsPageState extends State<_BasicProfileSettingsPage> {
       ),
     );
   }
-
-  InputDecoration _buildInputDecoration({
-    required String labelText,
-    String? hintText,
-  }) {
-    return InputDecoration(
-      labelText: labelText,
-      hintText: hintText,
-      filled: true,
-      fillColor: const Color(0xFFF8FAFC),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(DashboardTokens.buttonRadius),
-        borderSide: BorderSide.none,
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(DashboardTokens.buttonRadius),
-        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(DashboardTokens.buttonRadius),
-        borderSide: const BorderSide(color: _DashboardColors.accent),
-      ),
-    );
-  }
 }
 
 class _ApiSettingsPage extends StatefulWidget {
-  const _ApiSettingsPage({required this.initialSettings});
+  const _ApiSettingsPage({
+    required this.initialSettings,
+    required this.snapshotStore,
+  });
 
   final ApiSettings initialSettings;
+  final LocalSnapshotStore snapshotStore;
 
   @override
   State<_ApiSettingsPage> createState() => _ApiSettingsPageState();
@@ -3323,31 +3753,83 @@ class _ApiSettingsPageState extends State<_ApiSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final hasApiKey = _apiKeyCtrl.text.trim().isNotEmpty;
+    final activeEndpoint =
+        _preferredEndpoint == 'fallback' ? '回退线路' : '主线路';
+
+    return DashboardTabPageScaffold(
+      title: 'API 设置',
+      showAppBar: false,
+      selectedTab: DashboardTab.profile,
+      useSafeArea: false,
       backgroundColor: _DashboardColors.pageBackground,
-      appBar: AppBar(
-        title: const Text('API 设置'),
-        backgroundColor: Colors.white,
-        foregroundColor: _DashboardColors.textPrimary,
-        elevation: 0,
-      ),
+      snapshotStore: widget.snapshotStore,
+      allowReselectCurrentTab: true,
       body: SafeArea(
         child: Form(
           key: _formKey,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             children: [
-              Container(
+              const DashboardPageHeader(
+                title: 'API 设置',
+                subtitle: '延续首页四标签规范，统一连接参数与优先策略。',
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: _SettingsOverviewTile(
+                      icon: Icons.hub_outlined,
+                      title: '当前通道',
+                      value: activeEndpoint,
+                      iconBackground: DashboardTokens.warningSoft,
+                      iconColor: _DashboardColors.accent,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _SettingsOverviewTile(
+                      icon: hasApiKey
+                          ? Icons.verified_outlined
+                          : Icons.key_off_outlined,
+                      title: '密钥状态',
+                      value: hasApiKey ? '已配置' : '待配置',
+                      iconBackground: hasApiKey
+                          ? DashboardTokens.successSoft
+                          : DashboardTokens.neutralSoft,
+                      iconColor: hasApiKey
+                          ? _DashboardColors.success
+                          : _DashboardColors.textMuted,
+                      valueColor: hasApiKey
+                          ? _DashboardColors.success
+                          : _DashboardColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              DashboardSurfaceCard(
+                outlined: true,
                 padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(DashboardTokens.cardRadius),
-                ),
                 child: Column(
                   children: [
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '连接参数',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
                     TextFormField(
                       controller: _apiKeyCtrl,
-                      decoration: _buildInputDecoration(
+                      onChanged: (_) => setState(() {}),
+                      decoration: _buildDashboardInputDecoration(
                         labelText: 'API Key',
                         hintText: 'sk-...',
                       ),
@@ -3355,7 +3837,7 @@ class _ApiSettingsPageState extends State<_ApiSettingsPage> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _primaryBaseUrlCtrl,
-                      decoration: _buildInputDecoration(
+                      decoration: _buildDashboardInputDecoration(
                         labelText: '主 Base URL',
                         hintText: 'https://codex-api.packycode.com/v1',
                       ),
@@ -3368,7 +3850,7 @@ class _ApiSettingsPageState extends State<_ApiSettingsPage> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _fallbackBaseUrlCtrl,
-                      decoration: _buildInputDecoration(
+                      decoration: _buildDashboardInputDecoration(
                         labelText: '回退 Base URL',
                         hintText: 'https://api.deepseek.com',
                       ),
@@ -3382,49 +3864,60 @@ class _ApiSettingsPageState extends State<_ApiSettingsPage> {
                 ),
               ),
               const SizedBox(height: 12),
-              Container(
+              DashboardSurfaceCard(
+                outlined: true,
                 padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(DashboardTokens.cardRadius),
-                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
                       '优先使用',
-                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: 8),
-                    SegmentedButton<String>(
-                      segments: const [
-                        ButtonSegment<String>(
+                    DashboardSegmentedTabSelector<String>(
+                      items: const [
+                        DashboardSegmentedTabItem<String>(
                           value: 'primary',
-                          label: Text('主 Base URL'),
+                          label: '主 Base URL',
                         ),
-                        ButtonSegment<String>(
+                        DashboardSegmentedTabItem<String>(
                           value: 'fallback',
-                          label: Text('回退 Base URL'),
+                          label: '回退 Base URL',
                         ),
                       ],
-                      selected: {_preferredEndpoint},
-                      style: SegmentedButton.styleFrom(
-                        selectedBackgroundColor: _DashboardColors.accent,
-                        selectedForegroundColor: Colors.white,
-                        foregroundColor: const Color(0xFF3C3C43),
-                        side: BorderSide.none,
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        textStyle: const TextStyle(fontSize: 12),
+                      selectedValue: _preferredEndpoint,
+                      onChanged: (value) =>
+                          setState(() => _preferredEndpoint = value),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              const DashboardSurfaceCard(
+                outlined: true,
+                padding: EdgeInsets.fromLTRB(12, 10, 12, 10),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.shield_outlined,
+                      size: 18,
+                      color: DashboardTokens.textMuted,
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '优先线路会在生成计划与语音播报时生效，建议保持主线路可用并配置回退线路。',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: DashboardTokens.textSecondary,
+                          height: 1.35,
+                        ),
                       ),
-                      onSelectionChanged: (selection) {
-                        final selected = selection.isEmpty
-                            ? null
-                            : selection.first;
-                        if (selected == null) {
-                          return;
-                        }
-                        setState(() => _preferredEndpoint = selected);
-                      },
                     ),
                   ],
                 ),
@@ -3456,30 +3949,6 @@ class _ApiSettingsPageState extends State<_ApiSettingsPage> {
       ),
     );
   }
-
-  InputDecoration _buildInputDecoration({
-    required String labelText,
-    required String hintText,
-  }) {
-    return InputDecoration(
-      labelText: labelText,
-      hintText: hintText,
-      filled: true,
-      fillColor: const Color(0xFFF8FAFC),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(DashboardTokens.buttonRadius),
-        borderSide: BorderSide.none,
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(DashboardTokens.buttonRadius),
-        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(DashboardTokens.buttonRadius),
-        borderSide: const BorderSide(color: _DashboardColors.accent),
-      ),
-    );
-  }
 }
 
 class _FullscreenLoadingPage extends StatelessWidget {
@@ -3490,34 +3959,33 @@ class _FullscreenLoadingPage extends StatelessWidget {
     return PopScope(
       canPop: false,
       child: ColoredBox(
-        color: const Color(0xFF0F172A).withValues(alpha: 0.28),
+        color: DashboardTokens.textPrimary.withValues(alpha: 0.24),
         child: Center(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 22),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(DashboardTokens.cardRadius),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x220F172A),
-                  blurRadius: 18,
-                  offset: Offset(0, 8),
-                ),
-              ],
-            ),
-            child: const Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(color: _DashboardColors.accent),
-                SizedBox(height: 12),
-                Text(
-                  '正在生成计划，请稍候...',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: _DashboardColors.textSecondary,
+          child: SizedBox(
+            width: 260,
+            child: DashboardSurfaceCard(
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 20),
+              outlined: true,
+              child: const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.auto_awesome_rounded,
+                    color: _DashboardColors.accent,
+                    size: 24,
                   ),
-                ),
-              ],
+                  SizedBox(height: 10),
+                  CircularProgressIndicator(color: _DashboardColors.accent),
+                  SizedBox(height: 12),
+                  Text(
+                    '正在生成计划，请稍候...',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: _DashboardColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

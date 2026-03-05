@@ -10,7 +10,10 @@ import '../services/voice_broadcast_service.dart';
 import '../theme/dashboard_tokens.dart';
 import '../widgets/animated_timer_button.dart';
 import '../widgets/completion_feedback.dart';
-import '../widgets/dashboard_bottom_tab_bar.dart';
+import '../widgets/dashboard_page_header.dart';
+import '../widgets/dashboard_snack_bar.dart';
+import '../widgets/dashboard_surface_card.dart';
+import '../widgets/dashboard_tab_page_scaffold.dart';
 import '../widgets/risk_banner.dart';
 
 class TrainingSessionPage extends StatefulWidget {
@@ -214,9 +217,7 @@ class _TrainingSessionPageState extends State<TrainingSessionPage> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('已重播当前动作语音指导')));
+      showDashboardSnackBar(context, message: '已重播当前动作语音指导');
     } finally {
       if (mounted) {
         setState(() => _manualAnnounceBusy = false);
@@ -344,26 +345,16 @@ class _TrainingSessionPageState extends State<TrainingSessionPage> {
       return true;
     }
 
-    final shouldExit = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('确认结束本次训练？'),
-          content: Text(
-            '你已完成 ${_completedIndexes.length}/${widget.plan.items.length} 项，退出后可从首页继续。',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('继续训练'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('退出'),
-            ),
-          ],
-        );
-      },
+    final shouldExit = await _showSessionDialog(
+      title: '确认结束本次训练？',
+      subtitle: '当前进度会被保留，可随时从首页继续。',
+      message:
+          '你已完成 ${_completedIndexes.length}/${widget.plan.items.length} 项，退出后可在训练页继续。',
+      icon: Icons.exit_to_app_rounded,
+      iconBackground: _SessionColors.warningSoft,
+      iconColor: _SessionColors.warning,
+      secondaryLabel: '继续训练',
+      primaryLabel: '退出',
     );
 
     if (shouldExit == true) {
@@ -421,25 +412,147 @@ class _TrainingSessionPageState extends State<TrainingSessionPage> {
   }
 
   void _showFinishDialog() {
-    showDialog<void>(
+    _showSessionDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('今日打卡完成'),
-          content: const Text('你已完成全部训练，继续保持！'),
-          actions: [
-            FilledButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                DashboardTabNavigator.goToTabRoot(
-                  this.context,
-                  tab: DashboardTab.home,
-                  snapshotStore: widget.snapshotStore,
-                );
-              },
-              child: const Text('返回首页'),
+      title: '今日打卡完成',
+      subtitle: '全部训练动作已完成，继续保持这份节奏。',
+      message: '恭喜你完成全部训练，点击返回首页查看最新状态。',
+      icon: Icons.emoji_events_rounded,
+      iconBackground: _SessionColors.successSoft,
+      iconColor: _SessionColors.success,
+      primaryLabel: '返回首页',
+      secondaryLabel: null,
+      onPrimaryPressed: () => DashboardTabNavigator.goToTabRoot(
+        context,
+        tab: DashboardTab.home,
+        snapshotStore: widget.snapshotStore,
+      ),
+    );
+  }
+
+  Future<bool?> _showSessionDialog({
+    BuildContext? context,
+    required String title,
+    required String subtitle,
+    required String message,
+    required IconData icon,
+    required Color iconBackground,
+    required Color iconColor,
+    required String primaryLabel,
+    String? secondaryLabel = '取消',
+    VoidCallback? onPrimaryPressed,
+    bool barrierDismissible = true,
+  }) {
+    final dialogContext = context ?? this.context;
+    return showDialog<bool>(
+      context: dialogContext,
+      barrierDismissible: barrierDismissible,
+      builder: (overlayContext) {
+        return Dialog(
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+          child: DashboardSurfaceCard(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: iconBackground,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(icon, color: iconColor, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              color: _SessionColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            subtitle,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: _SessionColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  message,
+                  style: const TextStyle(
+                    color: _SessionColors.textSecondary,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    if (secondaryLabel != null) ...[
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.of(overlayContext).pop(
+                            false,
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(44),
+                            side: const BorderSide(color: DashboardTokens.outline),
+                            foregroundColor: _SessionColors.textPrimary,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(
+                                DashboardTokens.buttonRadius,
+                              ),
+                            ),
+                          ),
+                          child: Text(secondaryLabel),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                    ],
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () {
+                          Navigator.of(overlayContext).pop(true);
+                          onPrimaryPressed?.call();
+                        },
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(44),
+                          backgroundColor: _SessionColors.accent,
+                          foregroundColor: DashboardTokens.surface,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(
+                              DashboardTokens.buttonRadius,
+                            ),
+                          ),
+                        ),
+                        child: Text(primaryLabel),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ],
+          ),
         );
       },
     );
@@ -447,9 +560,11 @@ class _TrainingSessionPageState extends State<TrainingSessionPage> {
 
   Future<void> _onBottomTabChanged(DashboardTab tab) async {
     if (_currentTimerRunning) {
-      ScaffoldMessenger.of(
+      showDashboardSnackBar(
         context,
-      ).showSnackBar(const SnackBar(content: Text('当前计时进行中，请先暂停或完成本项')));
+        message: '当前计时进行中，请先暂停或完成本项',
+        isError: true,
+      );
       return;
     }
 
@@ -468,7 +583,56 @@ class _TrainingSessionPageState extends State<TrainingSessionPage> {
   @override
   Widget build(BuildContext context) {
     if (_restoring) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return DashboardTabPageScaffold(
+        title: '今日训练打卡',
+        showAppBar: false,
+        selectedTab: DashboardTab.plan,
+        snapshotStore: widget.snapshotStore,
+        onTabChanged: _onBottomTabChanged,
+        allowReselectCurrentTab: true,
+        backgroundColor: _SessionColors.pageBackground,
+        body: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Column(
+            children: [
+              const DashboardPageHeader(
+                title: '训练会话',
+                subtitle: '按首页四标签规范完成今日训练打卡。',
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: Center(
+                  child: SizedBox(
+                    width: 240,
+                    child: DashboardSurfaceCard(
+                      outlined: true,
+                      child: const Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.directions_run_rounded,
+                            size: 28,
+                            color: _SessionColors.accent,
+                          ),
+                          SizedBox(height: 12),
+                          CircularProgressIndicator(
+                            color: _SessionColors.accent,
+                          ),
+                          SizedBox(height: 10),
+                          Text(
+                            '正在恢复训练进度...',
+                            style: TextStyle(color: _SessionColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     final items = widget.plan.items;
@@ -483,359 +647,429 @@ class _TrainingSessionPageState extends State<TrainingSessionPage> {
           Navigator.of(context).pop();
         }
       },
-      child: Scaffold(
+      child: DashboardTabPageScaffold(
+        title: '今日训练打卡',
+        showAppBar: false,
+        selectedTab: DashboardTab.plan,
+        snapshotStore: widget.snapshotStore,
+        onTabChanged: _onBottomTabChanged,
+        allowReselectCurrentTab: true,
         backgroundColor: _SessionColors.pageBackground,
-        appBar: AppBar(
-          title: const Text('今日训练打卡'),
-          backgroundColor: _SessionColors.surface,
-          foregroundColor: _SessionColors.textPrimary,
-          elevation: 0,
-        ),
-        body: SafeArea(
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: _SessionColors.surface,
-                        borderRadius: BorderRadius.circular(
-                          DashboardTokens.cardRadius,
-                        ),
-                      ),
-                      child: RiskBanner(
-                        warning: widget.plan.warning,
-                        expanded: _riskExpanded,
-                        onToggle: () async {
-                          setState(() => _riskExpanded = !_riskExpanded);
-                          await _persistSessionState();
-                        },
-                      ),
-                    ),
+        body: Stack(
+          alignment: Alignment.center,
+          children: [
+            Column(
+              children: [
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: DashboardPageHeader(
+                    title: '训练会话',
+                    subtitle: '按首页四标签规范完成今日训练打卡。',
                   ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: _SessionColors.surface,
-                        borderRadius: BorderRadius.circular(
-                          DashboardTokens.cardRadius,
-                        ),
-                      ),
-                      child: _ProgressCheckpoints(
-                        total: items.length,
-                        currentIndex: _currentIndex,
-                        completed: _completedIndexes,
-                        completedDurationSec: _elapsedDurationSec,
-                        totalDurationSec: _totalDurationSec,
-                        remainingDurationSec: _remainingDurationSec,
-                        estimatedFinishText: _formatEstimatedFinishTime(
-                          _remainingDurationSec,
-                        ),
-                        formatDuration: _formatDuration,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: PageView.builder(
-                      controller: _controller,
-                      itemCount: items.length,
-                      physics: const NeverScrollableScrollPhysics(),
-                      onPageChanged: (index) async {
-                        setState(() {
-                          _currentIndex = index;
-                          _showFeedback = false;
-                          _currentTimerRunning = _runningTimerIndexes.contains(
-                            index,
-                          );
-                        });
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: DashboardSurfaceCard(
+                    color: _SessionColors.surface,
+                    outlined: true,
+                    child: RiskBanner(
+                      warning: widget.plan.warning,
+                      expanded: _riskExpanded,
+                      onToggle: () async {
+                        setState(() => _riskExpanded = !_riskExpanded);
                         await _persistSessionState();
-                        await _announceCurrentItem(force: true);
-                        if (_autoStartOnArrival && mounted) {
-                          setState(() {
-                            _autoStartOnArrival = false;
-                            _timerAutoStartSignal += 1;
-                          });
-                        }
                       },
-                      itemBuilder: (context, index) {
-                        final item = items[index];
-                        final isRest = item.type == 'rest';
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 12,
-                          ),
-                          child: Container(
-                            padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(
-                              color: _SessionColors.surface,
-                              borderRadius: BorderRadius.circular(
-                                DashboardTokens.cardRadius,
-                              ),
-                            ),
-                            child: SingleChildScrollView(
-                              child: Column(
-                                children: [
-                                  Text(
-                                    '第 ${index + 1} 项',
-                                    style: const TextStyle(
-                                      color: _SessionColors.textMuted,
-                                      fontSize: 14,
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: DashboardSurfaceCard(
+                    color: _SessionColors.surface,
+                    outlined: true,
+                    child: _ProgressCheckpoints(
+                      total: items.length,
+                      currentIndex: _currentIndex,
+                      completed: _completedIndexes,
+                      completedDurationSec: _elapsedDurationSec,
+                      totalDurationSec: _totalDurationSec,
+                      remainingDurationSec: _remainingDurationSec,
+                      estimatedFinishText: _formatEstimatedFinishTime(
+                        _remainingDurationSec,
+                      ),
+                      formatDuration: _formatDuration,
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _SessionOverviewTile(
+                          icon: Icons.task_alt_rounded,
+                          title: '已完成',
+                          value: '${_completedIndexes.length} 项',
+                          background: DashboardTokens.successSoft,
+                          iconColor: _SessionColors.success,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _SessionOverviewTile(
+                          icon: Icons.schedule_rounded,
+                          title: '预计剩余',
+                          value: _formatDuration(_remainingDurationSec),
+                          background: DashboardTokens.warningSoft,
+                          iconColor: _SessionColors.accent,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: PageView.builder(
+                    controller: _controller,
+                    itemCount: items.length,
+                    physics: const NeverScrollableScrollPhysics(),
+                    onPageChanged: (index) async {
+                      setState(() {
+                        _currentIndex = index;
+                        _showFeedback = false;
+                        _currentTimerRunning = _runningTimerIndexes.contains(
+                          index,
+                        );
+                      });
+                      await _persistSessionState();
+                      await _announceCurrentItem(force: true);
+                      if (_autoStartOnArrival && mounted) {
+                        setState(() {
+                          _autoStartOnArrival = false;
+                          _timerAutoStartSignal += 1;
+                        });
+                      }
+                    },
+                    itemBuilder: (context, index) {
+                      final item = items[index];
+                      final isRest = item.type == 'rest';
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 12,
+                        ),
+                        child: DashboardSurfaceCard(
+                          padding: const EdgeInsets.all(20),
+                          color: _SessionColors.surface,
+                          outlined: true,
+                          child: SingleChildScrollView(
+                            child: Column(
+                              children: [
+                                Text(
+                                  '第 ${index + 1} 项',
+                                  style: const TextStyle(
+                                    color: _SessionColors.textMuted,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  item.effectiveTitle,
+                                  style: const TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w700,
+                                    color: _SessionColors.textPrimary,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  isRest
+                                      ? '类型：休息'
+                                      : '强度：${item.intensity}  |  器材：${item.equipment}',
+                                  style: const TextStyle(
+                                    color: _SessionColors.textSecondary,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  item.instructions,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    color: _SessionColors.textSecondary,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  '时长：${_formatDuration(_itemTargetSec(item))}',
+                                  style: const TextStyle(
+                                    color: _SessionColors.textMuted,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                _NextStepHint(
+                                  currentIndex: index,
+                                  items: items,
+                                  formatDuration: _formatDuration,
+                                  itemTargetSec: _itemTargetSec,
+                                ),
+                                const SizedBox(height: 24),
+                                OutlinedButton.icon(
+                                  onPressed: _manualAnnounceBusy
+                                      ? null
+                                      : _replayCurrentGuidance,
+                                  style: OutlinedButton.styleFrom(
+                                    minimumSize: const Size.fromHeight(44),
+                                    side: const BorderSide(
+                                      color: DashboardTokens.outline,
+                                    ),
+                                    foregroundColor: _SessionColors.textPrimary,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(
+                                        DashboardTokens.buttonRadius,
+                                      ),
                                     ),
                                   ),
+                                  icon: _manualAnnounceBusy
+                                      ? const SizedBox(
+                                          width: 14,
+                                          height: 14,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : const Icon(Icons.volume_up_outlined),
+                                  label: const Text('重播语音指导'),
+                                ),
+                                const SizedBox(height: 12),
+                                AnimatedTimerButton(
+                                  key: ValueKey('timer-$index'),
+                                  duration: Duration(
+                                    seconds: _itemTargetSec(item),
+                                  ),
+                                  autoStartSignal: index == _currentIndex
+                                      ? _timerAutoStartSignal
+                                      : 0,
+                                  onCompleted: () => _markStepDone(index),
+                                  onTick: (remainingSeconds) {
+                                    if (!mounted ||
+                                        _completedIndexes.contains(index)) {
+                                      return;
+                                    }
+                                    final target = _itemTargetSec(item);
+                                    final elapsed = (target - remainingSeconds)
+                                        .clamp(0, target);
+                                    setState(() {
+                                      _elapsedSecByIndex[index] = elapsed;
+                                    });
+                                  },
+                                  onStatusChanged: (status) {
+                                    if (!mounted) {
+                                      return;
+                                    }
+                                    final runningNow =
+                                        status == TimerButtonStatus.running;
+                                    if (status == TimerButtonStatus.running) {
+                                      _markStarted(index);
+                                    }
+                                    WidgetsBinding.instance
+                                        .addPostFrameCallback((_) {
+                                          if (!mounted) {
+                                            return;
+                                          }
+                                          setState(() {
+                                            if (runningNow) {
+                                              _runningTimerIndexes.add(index);
+                                            } else {
+                                              _runningTimerIndexes.remove(
+                                                index,
+                                              );
+                                            }
+
+                                            if (index == _currentIndex) {
+                                              _currentTimerRunning = runningNow;
+                                            }
+
+                                            if (status ==
+                                                TimerButtonStatus.idle) {
+                                              _showFeedback = false;
+                                              if (!_completedIndexes.contains(
+                                                index,
+                                              )) {
+                                                _elapsedSecByIndex[index] = 0;
+                                              }
+                                            }
+                                          });
+                                        });
+                                  },
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  _completedIndexes.contains(index)
+                                      ? '本项已达成，可进入下一项'
+                                      : '完成计时后才可进入下一项',
+                                  style: TextStyle(
+                                    color: _completedIndexes.contains(index)
+                                        ? _SessionColors.success
+                                        : _SessionColors.warning,
+                                  ),
+                                ),
+                                if (isRest &&
+                                    !_completedIndexes.contains(index)) ...[
                                   const SizedBox(height: 8),
-                                  Text(
-                                    item.effectiveTitle,
-                                    style: const TextStyle(
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.w700,
-                                      color: _SessionColors.textPrimary,
-                                    ),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    isRest
-                                        ? '类型：休息'
-                                        : '强度：${item.intensity}  |  器材：${item.equipment}',
-                                    style: const TextStyle(
-                                      color: _SessionColors.textSecondary,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Text(
-                                    item.instructions,
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      color: _SessionColors.textSecondary,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    '时长：${_formatDuration(_itemTargetSec(item))}',
-                                    style: const TextStyle(
-                                      color: _SessionColors.textMuted,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  _NextStepHint(
-                                    currentIndex: index,
-                                    items: items,
-                                    formatDuration: _formatDuration,
-                                    itemTargetSec: _itemTargetSec,
-                                  ),
-                                  const SizedBox(height: 24),
-                                  OutlinedButton.icon(
-                                    onPressed: _manualAnnounceBusy
+                                  TextButton.icon(
+                                    onPressed:
+                                        _quickActionBusyIndexes.contains(index)
                                         ? null
-                                        : _replayCurrentGuidance,
-                                    style: OutlinedButton.styleFrom(
-                                      minimumSize: const Size.fromHeight(44),
-                                      side: const BorderSide(
-                                        color: DashboardTokens.outline,
-                                      ),
-                                      foregroundColor: _SessionColors.textPrimary,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(DashboardTokens.buttonRadius),
-                                      ),
-                                    ),
-                                    icon: _manualAnnounceBusy
+                                        : () => _skipRestAndContinue(index),
+                                    icon:
+                                        _quickActionBusyIndexes.contains(index)
                                         ? const SizedBox(
-                                            width: 14,
-                                            height: 14,
+                                            width: 16,
+                                            height: 16,
                                             child: CircularProgressIndicator(
                                               strokeWidth: 2,
                                             ),
                                           )
-                                        : const Icon(Icons.volume_up_outlined),
-                                    label: const Text('重播语音指导'),
+                                        : const Icon(Icons.skip_next),
+                                    label: const Text('跳过休息并进入下一项'),
                                   ),
-                                  const SizedBox(height: 12),
-                                  AnimatedTimerButton(
-                                    key: ValueKey('timer-$index'),
-                                    duration: Duration(
-                                      seconds: _itemTargetSec(item),
-                                    ),
-                                    autoStartSignal: index == _currentIndex
-                                        ? _timerAutoStartSignal
-                                        : 0,
-                                    onCompleted: () => _markStepDone(index),
-                                    onTick: (remainingSeconds) {
-                                      if (!mounted ||
-                                          _completedIndexes.contains(index)) {
-                                        return;
-                                      }
-                                      final target = _itemTargetSec(item);
-                                      final elapsed =
-                                          (target - remainingSeconds).clamp(
-                                            0,
-                                            target,
-                                          );
-                                      setState(() {
-                                        _elapsedSecByIndex[index] = elapsed;
-                                      });
-                                    },
-                                    onStatusChanged: (status) {
-                                      if (!mounted) {
-                                        return;
-                                      }
-                                      final runningNow =
-                                          status == TimerButtonStatus.running;
-                                      if (status == TimerButtonStatus.running) {
-                                        _markStarted(index);
-                                      }
-                                      WidgetsBinding.instance
-                                          .addPostFrameCallback((_) {
-                                            if (!mounted) {
-                                              return;
-                                            }
-                                            setState(() {
-                                              if (runningNow) {
-                                                _runningTimerIndexes.add(index);
-                                              } else {
-                                                _runningTimerIndexes.remove(
-                                                  index,
-                                                );
-                                              }
-
-                                              if (index == _currentIndex) {
-                                                _currentTimerRunning =
-                                                    runningNow;
-                                              }
-
-                                              if (status ==
-                                                  TimerButtonStatus.idle) {
-                                                _showFeedback = false;
-                                                if (!_completedIndexes.contains(
-                                                  index,
-                                                )) {
-                                                  _elapsedSecByIndex[index] = 0;
-                                                }
-                                              }
-                                            });
-                                          });
-                                    },
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    _completedIndexes.contains(index)
-                                        ? '本项已达成，可进入下一项'
-                                        : '完成计时后才可进入下一项',
-                                    style: TextStyle(
-                                      color: _completedIndexes.contains(index)
-                                          ? _SessionColors.success
-                                          : _SessionColors.warning,
-                                    ),
-                                  ),
-                                  if (isRest &&
-                                      !_completedIndexes.contains(index)) ...[
-                                    const SizedBox(height: 8),
-                                    TextButton.icon(
-                                      onPressed:
-                                          _quickActionBusyIndexes.contains(
-                                            index,
-                                          )
-                                          ? null
-                                          : () => _skipRestAndContinue(index),
-                                      icon:
-                                          _quickActionBusyIndexes.contains(
-                                            index,
-                                          )
-                                          ? const SizedBox(
-                                              width: 16,
-                                              height: 16,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                              ),
-                                            )
-                                          : const Icon(Icons.skip_next),
-                                      label: const Text('跳过休息并进入下一项'),
-                                    ),
-                                  ],
                                 ],
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed:
-                                _currentIndex == 0 || _currentTimerRunning
-                                ? null
-                                : () => _controller.previousPage(
-                                    duration: const Duration(milliseconds: 260),
-                                    curve: Curves.easeOutCubic,
-                                  ),
-                            style: OutlinedButton.styleFrom(
-                              minimumSize: const Size.fromHeight(46),
-                              backgroundColor: _SessionColors.surface,
-                              foregroundColor: _SessionColors.textPrimary,
-                              side: const BorderSide(
-                                color: DashboardTokens.outline,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(DashboardTokens.buttonRadius),
-                              ),
-                            ),
-                            child: const Text('上一项'),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: FilledButton(
-                            onPressed: _canMoveNext && !_autoAdvancing
-                                ? _goNext
-                                : null,
-                            style: FilledButton.styleFrom(
-                              minimumSize: const Size.fromHeight(46),
-                              backgroundColor: _SessionColors.accent,
-                              foregroundColor: _SessionColors.surface,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(DashboardTokens.buttonRadius),
-                              ),
-                            ),
-                            child: Text(
-                              _currentIndex == items.length - 1
-                                  ? '完成训练'
-                                  : '下一项',
+                              ],
                             ),
                           ),
                         ),
-                      ],
-                    ),
+                      );
+                    },
                   ),
-                  if (_currentTimerRunning)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                      child: Text(
-                        '当前计时进行中，先暂停或完成本项再切换动作。',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: _SessionColors.warning),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _currentIndex == 0 || _currentTimerRunning
+                              ? null
+                              : () => _controller.previousPage(
+                                  duration: const Duration(milliseconds: 260),
+                                  curve: Curves.easeOutCubic,
+                                ),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(46),
+                            backgroundColor: _SessionColors.surface,
+                            foregroundColor: _SessionColors.textPrimary,
+                            side: const BorderSide(
+                              color: DashboardTokens.outline,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(
+                                DashboardTokens.buttonRadius,
+                              ),
+                            ),
+                          ),
+                          child: const Text('上一项'),
+                        ),
                       ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: _canMoveNext && !_autoAdvancing
+                              ? _goNext
+                              : null,
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size.fromHeight(46),
+                            backgroundColor: _SessionColors.accent,
+                            foregroundColor: _SessionColors.surface,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(
+                                DashboardTokens.buttonRadius,
+                              ),
+                            ),
+                          ),
+                          child: Text(
+                            _currentIndex == items.length - 1 ? '完成训练' : '下一项',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (_currentTimerRunning)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                    child: Text(
+                      '当前计时进行中，先暂停或完成本项再切换动作。',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: _SessionColors.warning),
                     ),
-                ],
-              ),
-              CompletionFeedback(visible: _showFeedback),
-            ],
+                  ),
+              ],
+            ),
+            CompletionFeedback(visible: _showFeedback),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SessionOverviewTile extends StatelessWidget {
+  const _SessionOverviewTile({
+    required this.icon,
+    required this.title,
+    required this.value,
+    required this.background,
+    required this.iconColor,
+  });
+
+  final IconData icon;
+  final String title;
+  final String value;
+  final Color background;
+  final Color iconColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return DashboardSurfaceCard(
+      outlined: true,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      child: Row(
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: background,
+              borderRadius: BorderRadius.circular(15),
+            ),
+            alignment: Alignment.center,
+            child: Icon(icon, size: 16, color: iconColor),
           ),
-        ),
-        bottomNavigationBar: DashboardBottomTabBar(
-          selectedTab: DashboardTab.plan,
-          onTabChanged: (tab) => _onBottomTabChanged(tab),
-        ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: _SessionColors.textMuted,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
+                    color: _SessionColors.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -882,15 +1116,15 @@ class _ProgressCheckpoints extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           '进度：${completed.length}/$total · ${formatDuration(completedDurationSec)} / ${formatDuration(totalDurationSec)} · 剩余 ${formatDuration(remainingDurationSec)}',
-          style: const TextStyle(color: _SessionColors.textSecondary),
+          style: const TextStyle(
+            fontSize: 13,
+            color: _SessionColors.textSecondary,
+          ),
         ),
         const SizedBox(height: 4),
         Text(
           estimatedFinishText,
-          style: const TextStyle(
-            color: _SessionColors.textMuted,
-            fontSize: 12,
-          ),
+          style: const TextStyle(color: _SessionColors.textMuted, fontSize: 12),
         ),
         const SizedBox(height: 8),
         Wrap(

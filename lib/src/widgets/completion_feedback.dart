@@ -2,6 +2,8 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../theme/dashboard_tokens.dart';
+
 class CompletionFeedback extends StatefulWidget {
   const CompletionFeedback({
     super.key,
@@ -18,9 +20,9 @@ class CompletionFeedback extends StatefulWidget {
 
 class _CompletionFeedbackState extends State<CompletionFeedback>
     with SingleTickerProviderStateMixin {
-  static const _accent = Color(0xFFF97316);
-  static const _success = Color(0xFF16A34A);
-  static const _textPrimary = Color(0xFF0F172A);
+  static const _accent = DashboardTokens.accent;
+  static const _success = DashboardTokens.success;
+  static const _textPrimary = DashboardTokens.textPrimary;
 
   late final AnimationController _controller;
   late final Animation<double> _scaleAnimation;
@@ -104,12 +106,14 @@ class _CompletionFeedbackState extends State<CompletionFeedback>
                     vertical: 14,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFFDDF7E8)),
+                    color: DashboardTokens.surface,
+                    borderRadius: BorderRadius.circular(
+                      DashboardTokens.cardRadius,
+                    ),
+                    border: Border.all(color: DashboardTokens.successSoft),
                     boxShadow: const [
                       BoxShadow(
-                        color: Color(0x1A0F172A),
+                        color: Color(0x140F172A),
                         blurRadius: 16,
                         offset: Offset(0, 6),
                       ),

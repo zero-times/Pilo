@@ -19,6 +19,8 @@ class DashboardTokens {
   static const iconDisabled = Color(0xFF9CA3AF);
   static const neutralSoft = Color(0xFFD1D5DB);
   static const neutralFaint = Color(0xFFE5E7EB);
+  static const inputFill = Color(0xFFF8FAFC);
+  static const inputBorder = Color(0xFFE2E8F0);
 
   static const cardRadius = 20.0;
   static const buttonRadius = 12.0;

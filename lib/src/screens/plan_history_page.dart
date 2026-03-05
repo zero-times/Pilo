@@ -4,7 +4,11 @@ import '../models/training_models.dart';
 import '../navigation/dashboard_tab_navigator.dart';
 import '../services/local_snapshot_store.dart';
 import '../theme/dashboard_tokens.dart';
-import '../widgets/dashboard_bottom_tab_bar.dart';
+import '../widgets/dashboard_page_header.dart';
+import '../widgets/dashboard_snack_bar.dart';
+import '../widgets/dashboard_surface_card.dart';
+import '../widgets/dashboard_tab_page_scaffold.dart';
+import '../widgets/dashboard_segmented_tab_selector.dart';
 import 'training_session_page.dart';
 
 class PlanHistoryPage extends StatefulWidget {
@@ -71,9 +75,10 @@ class _PlanHistoryPageState extends State<PlanHistoryPage> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
+      showDashboardSnackBar(
         context,
-      ).showSnackBar(SnackBar(content: Text(next ? '已加入收藏' : '已取消收藏')));
+        message: next ? '已加入收藏' : '已取消收藏',
+      );
     } finally {
       if (mounted) {
         setState(() => _favoritePendingIds.remove(plan.id));
@@ -127,108 +132,163 @@ class _PlanHistoryPageState extends State<PlanHistoryPage> {
     return '$yyyy-$mm-$dd $hh:$min';
   }
 
+  Widget _buildLoadingState() {
+    return Center(
+      child: SizedBox(
+        width: 238,
+        child: DashboardSurfaceCard(
+          outlined: true,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+          child: const Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.history_toggle_off_rounded,
+                size: 26,
+                color: DashboardTokens.accent,
+              ),
+              SizedBox(height: 10),
+              CircularProgressIndicator(color: DashboardTokens.accent),
+              SizedBox(height: 10),
+              Text(
+                '正在同步计划记录...',
+                style: TextStyle(color: DashboardTokens.textSecondary),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final plans = _filteredPlans;
-    return Scaffold(
-      backgroundColor: DashboardTokens.pageBackground,
-      appBar: AppBar(
-        title: const Text('历史训练计划'),
-        backgroundColor: DashboardTokens.surface,
-        foregroundColor: DashboardTokens.textPrimary,
-        elevation: 0,
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: DashboardTokens.surface,
-                  borderRadius: BorderRadius.circular(DashboardTokens.cardRadius),
+    final favoriteCount = _plans.where((plan) => plan.isFavorite).length;
+    return DashboardTabPageScaffold(
+      title: '历史训练计划',
+      showAppBar: false,
+      selectedTab: DashboardTab.plan,
+      snapshotStore: widget.snapshotStore,
+      allowReselectCurrentTab: true,
+      body: Column(
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: DashboardPageHeader(
+              title: '计划记录',
+              subtitle: '按首页四标签规范查看收藏与训练历史。',
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
+            child: DashboardSegmentedTabSelector<PlanHistoryFilter>(
+              items: const [
+                DashboardSegmentedTabItem<PlanHistoryFilter>(
+                  value: PlanHistoryFilter.favorites,
+                  label: '收藏',
+                  icon: Icons.star_border_rounded,
                 ),
-                child: SegmentedButton<PlanHistoryFilter>(
-                  segments: const [
-                    ButtonSegment<PlanHistoryFilter>(
-                      value: PlanHistoryFilter.favorites,
-                      label: Text('收藏'),
+                DashboardSegmentedTabItem<PlanHistoryFilter>(
+                  value: PlanHistoryFilter.history,
+                  label: '历史',
+                  icon: Icons.history_rounded,
+                ),
+              ],
+              selectedValue: _filter,
+              onChanged: (value) => setState(() => _filter = value),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+            child: DashboardSurfaceCard(
+              outlined: true,
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _HistoryStat(
+                      label: '全部计划',
+                      value: '${_plans.length}',
                     ),
-                    ButtonSegment<PlanHistoryFilter>(
-                      value: PlanHistoryFilter.history,
-                      label: Text('历史'),
-                    ),
-                  ],
-                  selected: {_filter},
-                  style: SegmentedButton.styleFrom(
-                    selectedBackgroundColor: DashboardTokens.accent,
-                    selectedForegroundColor: DashboardTokens.surface,
-                    foregroundColor: DashboardTokens.textSecondary,
-                    side: BorderSide.none,
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    textStyle: const TextStyle(fontSize: 12),
                   ),
-                  onSelectionChanged: (selection) {
-                    final first = selection.isEmpty ? null : selection.first;
-                    if (first == null) {
-                      return;
-                    }
-                    setState(() => _filter = first);
-                  },
-                ),
+                  Expanded(
+                    child: _HistoryStat(
+                      label: '收藏计划',
+                      value: '$favoriteCount',
+                    ),
+                  ),
+                  Expanded(
+                    child: _HistoryStat(
+                      label: '当前筛选',
+                      value: '${plans.length}',
+                    ),
+                  ),
+                ],
               ),
             ),
-            Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : plans.isEmpty
-                  ? _buildEmptyState(
-                      icon: _filter == PlanHistoryFilter.favorites
-                          ? Icons.star_border
-                          : Icons.history,
-                      message: _filter == PlanHistoryFilter.favorites
-                          ? '暂无收藏计划，先在历史里收藏一个吧。'
-                          : '暂无历史计划，先生成并完成训练计划。',
-                      actionLabel: _filter == PlanHistoryFilter.favorites
-                          ? '切到历史'
-                          : '去生成计划',
-                      onAction: _filter == PlanHistoryFilter.favorites
-                          ? () => setState(
-                              () => _filter = PlanHistoryFilter.history,
-                            )
-                          : () => DashboardTabNavigator.goToTabRoot(
-                              context,
-                              tab: DashboardTab.home,
-                              snapshotStore: widget.snapshotStore,
-                            ),
-                    )
-                  : ListView.builder(
-                      itemCount: plans.length,
-                      itemBuilder: (context, index) {
-                        final plan = plans[index];
-                        final isFavoritePending = _favoritePendingIds.contains(
-                          plan.id,
-                        );
-                        final isStarting = _startingPlanId == plan.id;
-                        final totalSec = plan.plan.totalDurationSeconds;
-                        final title = plan.plan.items.isEmpty
-                            ? '未命名计划'
-                            : plan.plan.items.first.effectiveTitle;
-                        return Container(
-                          margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: DashboardTokens.surface,
-                            borderRadius: BorderRadius.circular(
-                              DashboardTokens.cardRadius,
-                            ),
+          ),
+          Expanded(
+            child: _loading
+                ? _buildLoadingState()
+                : plans.isEmpty
+                ? _buildEmptyState(
+                    icon: _filter == PlanHistoryFilter.favorites
+                        ? Icons.star_border
+                        : Icons.history,
+                    message: _filter == PlanHistoryFilter.favorites
+                        ? '暂无收藏计划，先在历史里收藏一个吧。'
+                        : '暂无历史计划，先生成并完成训练计划。',
+                    actionLabel: _filter == PlanHistoryFilter.favorites
+                        ? '切到历史'
+                        : '去生成计划',
+                    onAction: _filter == PlanHistoryFilter.favorites
+                        ? () => setState(
+                            () => _filter = PlanHistoryFilter.history,
+                          )
+                        : () => DashboardTabNavigator.goToTabRoot(
+                            context,
+                            tab: DashboardTab.home,
+                            snapshotStore: widget.snapshotStore,
                           ),
+                  )
+                : ListView.builder(
+                    itemCount: plans.length,
+                    itemBuilder: (context, index) {
+                      final plan = plans[index];
+                      final isFavoritePending = _favoritePendingIds.contains(
+                        plan.id,
+                      );
+                      final isStarting = _startingPlanId == plan.id;
+                      final totalSec = plan.plan.totalDurationSeconds;
+                      final title = plan.plan.items.isEmpty
+                          ? '未命名计划'
+                          : plan.plan.items.first.effectiveTitle;
+                      return Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                        child: DashboardSurfaceCard(
+                          padding: const EdgeInsets.all(12),
+                          outlined: true,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
                                 children: [
+                                  Container(
+                                    width: 34,
+                                    height: 34,
+                                    decoration: BoxDecoration(
+                                      color: DashboardTokens.accentSoft,
+                                      borderRadius: BorderRadius.circular(17),
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: const Icon(
+                                      Icons.fitness_center,
+                                      size: 18,
+                                      color: DashboardTokens.accent,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
                                   Expanded(
                                     child: Text(
                                       title,
@@ -238,11 +298,38 @@ class _PlanHistoryPageState extends State<PlanHistoryPage> {
                                       ),
                                     ),
                                   ),
+                                  if (plan.timesTrained > 0)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: DashboardTokens.successSoft,
+                                        borderRadius: BorderRadius.circular(
+                                          999,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        '${plan.timesTrained} 次',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: DashboardTokens.success,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  const SizedBox(width: 4),
                                   IconButton(
                                     tooltip: plan.isFavorite ? '取消收藏' : '收藏',
                                     onPressed: isFavoritePending
                                         ? null
                                         : () => _toggleFavorite(plan),
+                                    style: IconButton.styleFrom(
+                                      backgroundColor:
+                                          DashboardTokens.warningSoft,
+                                      minimumSize: const Size(32, 32),
+                                    ),
                                     icon: Icon(
                                       plan.isFavorite
                                           ? Icons.star
@@ -301,27 +388,28 @@ class _PlanHistoryPageState extends State<PlanHistoryPage> {
                                           width: 18,
                                           child: CircularProgressIndicator(
                                             strokeWidth: 2,
+                                            color: DashboardTokens.surface,
                                           ),
                                         )
-                                      : const Text('开始训练'),
+                                      : const Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Icon(Icons.play_arrow_rounded),
+                                            SizedBox(width: 4),
+                                            Text('开始训练'),
+                                          ],
+                                        ),
                                 ),
                               ),
                             ],
                           ),
-                        );
-                      },
-                    ),
-            ),
-          ],
-        ),
-      ),
-      bottomNavigationBar: DashboardBottomTabBar(
-        selectedTab: DashboardTab.plan,
-        onTabChanged: (tab) => DashboardTabNavigator.goToTabRoot(
-          context,
-          tab: tab,
-          snapshotStore: widget.snapshotStore,
-        ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
       ),
     );
   }
@@ -335,13 +423,9 @@ class _PlanHistoryPageState extends State<PlanHistoryPage> {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
-        child: Container(
-          width: double.infinity,
+        child: DashboardSurfaceCard(
           padding: const EdgeInsets.fromLTRB(18, 22, 18, 18),
-          decoration: BoxDecoration(
-            color: DashboardTokens.surface,
-            borderRadius: BorderRadius.circular(DashboardTokens.cardRadius),
-          ),
+          outlined: true,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -376,6 +460,37 @@ class _PlanHistoryPageState extends State<PlanHistoryPage> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _HistoryStat extends StatelessWidget {
+  const _HistoryStat({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+            color: DashboardTokens.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            color: DashboardTokens.textMuted,
+          ),
+        ),
+      ],
     );
   }
 }

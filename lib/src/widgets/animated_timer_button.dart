@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/dashboard_tokens.dart';
+
 enum TimerButtonStatus { idle, running, paused, completed }
 
 class AnimatedTimerButton extends StatefulWidget {
@@ -24,8 +26,8 @@ class AnimatedTimerButton extends StatefulWidget {
 
 class _AnimatedTimerButtonState extends State<AnimatedTimerButton>
     with SingleTickerProviderStateMixin {
-  static const _accent = Color(0xFFF97316);
-  static const _textPrimary = Color(0xFF0F172A);
+  static const _accent = DashboardTokens.accent;
+  static const _textPrimary = DashboardTokens.textPrimary;
 
   late final AnimationController _controller;
   TimerButtonStatus _status = TimerButtonStatus.idle;
@@ -187,18 +189,22 @@ class _AnimatedTimerButtonState extends State<AnimatedTimerButton>
         final buttonStyle = isCompleted
             ? FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(44),
-                backgroundColor: const Color(0xFFF1F5F9),
+                backgroundColor: DashboardTokens.neutralFaint,
                 foregroundColor: _textPrimary,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(
+                    DashboardTokens.buttonRadius,
+                  ),
                 ),
               )
             : FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(44),
                 backgroundColor: _accent,
-                foregroundColor: Colors.white,
+                foregroundColor: DashboardTokens.surface,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(
+                    DashboardTokens.buttonRadius,
+                  ),
                 ),
               );
 
@@ -214,7 +220,7 @@ class _AnimatedTimerButtonState extends State<AnimatedTimerButton>
                     value: progress,
                     strokeWidth: 8,
                     color: _accent,
-                    backgroundColor: const Color(0xFFE5EAF0),
+                    backgroundColor: DashboardTokens.neutralSoft,
                   ),
                   isCompleted
                       ? Icon(Icons.check_circle, color: _accent, size: 36)
